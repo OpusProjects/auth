@@ -347,4 +347,84 @@ mod tests {
         assert!(err.message.contains("'pass'"), "error was: {}", err.message);
         assert!(err.message.contains("cred-a"));
     }
+
+    // A one-route-per-method fake Vault: any POST is a Kubernetes login that
+    // succeeds, any GET a KV v2 read answering {user: "motoko"}.
+    fn tiny_vault() -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut stream = stream.unwrap();
+                let mut request = [0u8; 8192];
+                let read = stream.read(&mut request).unwrap_or(0);
+                let body = if request[..read].starts_with(b"POST") {
+                    r#"{"auth":{"client_token":"tok","lease_duration":3600}}"#
+                } else {
+                    r#"{"data":{"data":{"user":"motoko"}}}"#
+                };
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        address
+    }
+
+    fn kubernetes_vault(address: &str, jwt_path: &str, credentials: &str) -> VaultSecrets {
+        let config: VaultConfig = serde_saphyr::from_str(&format!(
+            "address: {address}\nkubernetes_role: r\njwt_path: {jwt_path}\n"
+        ))
+        .unwrap();
+        let credentials: HashMap<String, Credential> = serde_saphyr::from_str(credentials).unwrap();
+        let inner = crate::env::EnvSecrets::new(credentials.clone());
+        VaultSecrets::new(config, credentials, Box::new(inner))
+    }
+
+    // The login token's lock, poisoned by a panic elsewhere, still logs in and
+    // still caches: the slot holds a whole token or none.
+    #[tokio::test]
+    async fn a_poisoned_login_lock_still_logs_in() {
+        let jwt = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(jwt.path(), "sa-jwt").unwrap();
+        let vault = std::sync::Arc::new(kubernetes_vault(
+            &tiny_vault(),
+            &jwt.path().display().to_string(),
+            "cred-a:\n  type: token\n  vault_path: a\n",
+        ));
+        let poisoner = std::sync::Arc::clone(&vault);
+        let _ = std::thread::spawn(move || {
+            let _held = poisoner.login.lock().unwrap();
+            panic!("poisoning the login lock on purpose");
+        })
+        .join();
+
+        assert_eq!(vault.resolve("cred-a").await.unwrap()["user"], "motoko");
+        assert_eq!(vault.resolve("cred-a").await.unwrap()["user"], "motoko");
+    }
+
+    #[tokio::test]
+    async fn an_unknown_credential_is_not_found() {
+        let vault = kubernetes_vault(&tiny_vault(), "/nonexistent", "{}");
+        let err = vault.resolve("cred-ghost").await.unwrap_err();
+        assert_eq!(err.message, "Credential 'cred-ghost' not found in config");
+    }
+
+    // secret_keys naming a field the secret does not have fail the read,
+    // naming the field, rather than delivering a partial credential.
+    #[tokio::test]
+    async fn a_mapped_field_missing_from_the_secret_fails_the_read() {
+        let jwt = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(jwt.path(), "sa-jwt").unwrap();
+        let vault = kubernetes_vault(
+            &tiny_vault(),
+            &jwt.path().display().to_string(),
+            "cred-a:\n  type: token\n  vault_path: a\n  secret_keys:\n    token: missing\n",
+        );
+        let err = vault.resolve("cred-a").await.unwrap_err();
+        assert!(err.message.contains("field 'missing'"), "{}", err.message);
+    }
 }

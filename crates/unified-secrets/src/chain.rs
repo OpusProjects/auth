@@ -242,4 +242,156 @@ mod tests {
         assert_eq!(chain.resolve("cred-a").await.unwrap()["token"], "t");
         assert_eq!(reads.load(Ordering::SeqCst), 1);
     }
+
+    // A fake Vault that answers every read with {token: "t"} and counts the
+    // reads, so a test can tell a cached answer from a fresh one.
+    fn counting_vault() -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::{Read, Write};
+        use std::sync::atomic::Ordering;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&reads);
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut stream = stream.unwrap();
+                let mut request = [0u8; 4096];
+                let _ = stream.read(&mut request);
+                counted.fetch_add(1, Ordering::SeqCst);
+                let body = r#"{"data":{"data":{"token":"t"}}}"#;
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        (address, reads)
+    }
+
+    fn many(entries: &[(&str, String)]) -> HashMap<String, Credential> {
+        entries
+            .iter()
+            .map(|(id, yaml)| (id.to_string(), serde_saphyr::from_str(yaml).unwrap()))
+            .collect()
+    }
+
+    fn reads(counter: &std::sync::atomic::AtomicUsize) -> usize {
+        counter.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    // A `type: vault` credential is a connection, not a login: resolving it
+    // only checks its token variable is there.
+    #[tokio::test]
+    async fn a_vault_credential_resolves_to_nothing_but_needs_its_token() {
+        let chain = build_chain(
+            &many(&[(
+                "vault-main",
+                "type: vault\naddress: https://v\nenv_vars:\n  token: UNIFIED_SECRETS_TEST_VAULT_TOKEN_ROUTE\n".to_string(),
+            )]),
+            &SecretsConfig::default(),
+        );
+        let err = chain.resolve("vault-main").await.unwrap_err();
+        assert_eq!(
+            err.message,
+            "Env var 'UNIFIED_SECRETS_TEST_VAULT_TOKEN_ROUTE' not set"
+        );
+        // SAFETY: a variable no other test reads.
+        unsafe { std::env::set_var("UNIFIED_SECRETS_TEST_VAULT_TOKEN_ROUTE", "x") };
+        assert!(chain.resolve("vault-main").await.unwrap().is_empty());
+    }
+
+    // Each named Vault reads through its own client, behind its own cache:
+    // 60 seconds unless it says otherwise, none at 0.
+    #[tokio::test]
+    async fn each_named_vault_has_its_own_cache() {
+        let (address, counter) = counting_vault();
+        // SAFETY: a variable no other test reads.
+        unsafe { std::env::set_var("UNIFIED_SECRETS_TEST_NAMED_VAULT_TOKEN", "x") };
+        let vault = |cache: &str| {
+            format!(
+                "type: vault\naddress: {address}\nenv_vars:\n  token: UNIFIED_SECRETS_TEST_NAMED_VAULT_TOKEN\n{cache}"
+            )
+        };
+        let chain = build_chain(
+            &many(&[
+                ("vault-cached", vault("")),
+                ("vault-fresh", vault("cache_ttl_seconds: 0\n")),
+                (
+                    "cred-cached",
+                    "type: token\nvault: vault-cached\nvault_path: a\n".to_string(),
+                ),
+                (
+                    "cred-fresh",
+                    "type: token\nvault: vault-fresh\nvault_path: a\n".to_string(),
+                ),
+            ]),
+            &SecretsConfig::default(),
+        );
+
+        assert_eq!(chain.resolve("cred-cached").await.unwrap()["token"], "t");
+        assert_eq!(chain.resolve("cred-cached").await.unwrap()["token"], "t");
+        assert_eq!(reads(&counter), 1);
+
+        chain.resolve("cred-fresh").await.unwrap();
+        chain.resolve("cred-fresh").await.unwrap();
+        assert_eq!(reads(&counter), 3);
+    }
+
+    // The deprecated outer TTL, while set, is the only cache: one in front of
+    // the whole chain, Vaults' own dropped (and the legacy Vault's default).
+    #[tokio::test]
+    async fn the_deprecated_ttl_wraps_the_whole_chain_instead() {
+        let (address, counter) = counting_vault();
+        // SAFETY: a variable no other test reads.
+        unsafe { std::env::set_var("UNIFIED_SECRETS_TEST_OUTER_VAULT_TOKEN", "x") };
+        let settings: SecretsConfig = serde_saphyr::from_str(&format!(
+            "cache_ttl_seconds: 30\nvault:\n  address: {address}\n  token_env: UNIFIED_SECRETS_TEST_OUTER_VAULT_TOKEN\n"
+        ))
+        .unwrap();
+        let chain = build_chain(
+            &many(&[
+                (
+                    "vault-main",
+                    format!(
+                        "type: vault\naddress: {address}\nenv_vars:\n  token: UNIFIED_SECRETS_TEST_OUTER_VAULT_TOKEN\n"
+                    ),
+                ),
+                (
+                    "cred-named",
+                    "type: token\nvault: vault-main\nvault_path: a\n".to_string(),
+                ),
+                ("cred-legacy", "type: token\nvault_path: b\n".to_string()),
+            ]),
+            &settings,
+        );
+
+        for _ in 0..2 {
+            chain.resolve("cred-named").await.unwrap();
+            chain.resolve("cred-legacy").await.unwrap();
+        }
+        assert_eq!(reads(&counter), 2);
+    }
+
+    #[tokio::test]
+    async fn a_vault_path_with_no_vault_to_read_from_is_named() {
+        let chain = build_chain(
+            &credentials("cred-a", "type: token\nvault_path: team/a\n"),
+            &SecretsConfig::default(),
+        );
+        let err = chain.resolve("cred-a").await.unwrap_err();
+        assert_eq!(
+            err.message,
+            "Credential 'cred-a' names no Vault to read from"
+        );
+    }
+
+    // An id the configuration does not have gets the env adapter's answer.
+    #[tokio::test]
+    async fn an_unknown_credential_is_not_found() {
+        let chain = build_chain(&HashMap::new(), &SecretsConfig::default());
+        let err = chain.resolve("cred-ghost").await.unwrap_err();
+        assert_eq!(err.message, "Credential 'cred-ghost' not found in config");
+    }
 }

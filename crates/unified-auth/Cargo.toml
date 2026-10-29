@@ -22,3 +22,8 @@ tracing.workspace = true
 
 [dev-dependencies]
 serde-saphyr.workspace = true
+# tokio virtual time (start_paused) for the throttle's delays, and a log
+# subscriber so the fields of a logged refusal are evaluated
+tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber = "0.3"
+tempfile.workspace = true

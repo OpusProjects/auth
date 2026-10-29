@@ -81,8 +81,9 @@ async fn authenticate(request: DirectoryLogin<'_>) -> Result<DirectoryUser, Dire
     let [entry] = entries.as_slice() else {
         let _ = ldap.unbind().await;
         if entries.len() > 1 {
+            let matches = entries.len();
             tracing::warn!(
-                matches = entries.len(),
+                matches,
                 "LDAP user filter matched more than one entry; refusing the login"
             );
         }
@@ -151,8 +152,11 @@ fn tls_config(ca_file: &str) -> Result<Arc<rustls::ClientConfig>, String> {
     let config = rustls::ClientConfig::builder_with_provider(Arc::new(
         rustls::crypto::ring::default_provider(),
     ))
+    // ring implements every protocol version rustls considers safe, so this
+    // cannot fail with this provider; a failure would be a build of rustls
+    // without TLS 1.2 and 1.3, which is a programming error, not a login's.
     .with_safe_default_protocol_versions()
-    .map_err(|e| format!("TLS setup: {e}"))?
+    .expect("the ring provider supports rustls' default protocol versions")
     .with_root_certificates(roots)
     .with_no_client_auth();
     Ok(Arc::new(config))
@@ -161,58 +165,53 @@ fn tls_config(ca_file: &str) -> Result<Arc<rustls::ClientConfig>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ldap::LdapServer;
-
-    fn config() -> LdapServer<'static> {
-        LdapServer {
-            // Nothing listens here: any attempt to connect fails, which is
-            // what these tests rely on to prove the guard ran first.
-            url: "ldap://127.0.0.1:1",
-            starttls: false,
-            ca_file: None,
-            search_base: "DC=example,DC=com",
-            user_filter: "(sAMAccountName={username})",
-            group_attribute: "memberOf",
-            username_attribute: "sAMAccountName",
-            timeout_seconds: 1,
-        }
-    }
-
-    // The unauthenticated-bind trap: refused before any connection is made,
-    // so the answer cannot depend on how the server treats it.
-    #[tokio::test]
-    async fn an_empty_password_never_reaches_the_directory() {
-        let config = config();
-        let result = LdapDirectory
-            .authenticate(DirectoryLogin {
-                server: config,
-                bind_dn: "CN=svc",
-                bind_password: "x",
-                username: "jdoe",
-                password: "",
-            })
-            .await;
-        assert_eq!(result.unwrap_err(), DirectoryError::InvalidCredentials);
-    }
-
-    #[tokio::test]
-    async fn an_unreachable_directory_is_unavailable_not_a_wrong_password() {
-        let config = config();
-        let result = LdapDirectory
-            .authenticate(DirectoryLogin {
-                server: config,
-                bind_dn: "CN=svc",
-                bind_password: "x",
-                username: "jdoe",
-                password: "secret",
-            })
-            .await;
-        assert!(matches!(result, Err(DirectoryError::Unavailable(_))));
-    }
 
     #[test]
     fn a_missing_ca_file_is_named() {
         let err = tls_config("/nonexistent/ca.pem").unwrap_err();
         assert!(err.contains("/nonexistent/ca.pem"), "{err}");
+    }
+
+    // ---------------------------------------------------------------------
+    // ca_file: a private CA, trusted alone
+    // ---------------------------------------------------------------------
+
+    // A throwaway self-signed CA, generated for these tests only.
+    const TEST_CA: &str = include_str!("../tests/fixtures/test-ca.pem");
+
+    fn pem_file(content: &str) -> tempfile::NamedTempFile {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), content).unwrap();
+        file
+    }
+
+    #[test]
+    fn a_ca_file_with_a_certificate_builds_a_tls_config() {
+        let ca = pem_file(TEST_CA);
+        assert!(tls_config(&ca.path().display().to_string()).is_ok());
+    }
+
+    #[test]
+    fn a_ca_file_without_a_certificate_is_refused() {
+        let empty = pem_file("no certificates here\n");
+        let err = tls_config(&empty.path().display().to_string()).unwrap_err();
+        assert!(err.ends_with("holds no certificate"), "{err}");
+    }
+
+    // A CERTIFICATE block whose bytes are not a certificate.
+    #[test]
+    fn a_ca_file_with_a_broken_certificate_is_refused() {
+        let broken = pem_file("-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n");
+        let path = broken.path().display().to_string();
+        let err = tls_config(&path).unwrap_err();
+        assert!(err.starts_with(&format!("ldap.ca_file '{path}'")), "{err}");
+    }
+
+    #[test]
+    fn a_ca_file_that_is_not_pem_is_refused() {
+        let garbled = pem_file("-----BEGIN CERTIFICATE-----\n!!!\n-----END CERTIFICATE-----\n");
+        let path = garbled.path().display().to_string();
+        let err = tls_config(&path).unwrap_err();
+        assert!(err.starts_with(&format!("ldap.ca_file '{path}'")), "{err}");
     }
 }

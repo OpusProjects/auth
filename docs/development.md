@@ -8,6 +8,7 @@ building a service against a local copy before anything is released.
 - [How a service depends on the crates](#how-a-service-depends-on-the-crates)
 - [Working on a service against a local copy](#working-on-a-service-against-a-local-copy)
 - [Where new code goes](#where-new-code-goes)
+- [Tests and coverage](#tests-and-coverage)
 
 ---
 
@@ -36,7 +37,7 @@ the reverse, so a tool that only needs secrets can depend on `unified-secrets` a
 
 | Job | What it checks |
 |---|---|
-| `test` | `cargo fmt --check`, clippy with warnings as errors, a check under the MSRV, tests with a coverage floor |
+| `test` | `cargo fmt --check`, clippy with warnings as errors, a check under the MSRV, tests with 100% line coverage |
 | `audit` | `cargo audit`: no RUSTSEC advisory in `Cargo.lock` (also nightly, on `main`) |
 | `deny` | `cargo deny check`: licenses, sources and advisories, per `deny.toml` (also nightly) |
 
@@ -91,6 +92,30 @@ New code goes in the crate whose job it is, with its tests in the same file.
   `unified-auth`.
 - **Anything one service needs and the other does not:** in that service, not here.
 
-Unit tests sit in a `#[cfg(test)] mod tests` at the bottom of the file they test. The suite needs no
-directory, Vault or network: the Vault tests answer from a socket on `127.0.0.1`, and the LDAP tests
-stop before any connection is made.
+Every new line comes with the test that runs it; see [Tests and coverage](#tests-and-coverage).
+
+---
+
+## Tests and coverage
+
+Every line of both crates runs in a test, and the `test` check fails a pull request that changes that.
+
+| Where | What goes there |
+|---|---|
+| `#[cfg(test)] mod tests` at the bottom of a file in `src/` | Unit tests of that file, including its private functions |
+| `crates/unified-secrets/tests/vault_test.rs` | The Vault adapter against a fake Vault: a few axum routes on `127.0.0.1` |
+| `crates/unified-auth/tests/ldap_directory_test.rs` | The LDAP adapter against a fake directory that speaks just enough LDAP (bind, search, unbind) |
+
+The suite needs no directory, Vault or network. Test code under `tests/` is not counted by
+`cargo llvm-cov`, which is why the two fakes live there: their own error handling would otherwise
+be lines no test reaches.
+
+```bash
+cargo llvm-cov --workspace --summary-only          # the number CI checks (lines: 100%)
+cargo llvm-cov --workspace --html --open           # which lines a change left uncovered
+```
+
+Two habits keep the number honest. A value logged as a field is computed into a local first
+(`let groups = user.member_of.len(); tracing::warn!(groups, ...)`), because `tracing` expands a field
+expression twice and one copy only runs without a subscriber. And a failure that cannot happen with
+the dependencies as configured is an `expect` naming why, not an error path no test can reach.

@@ -187,4 +187,27 @@ mod tests {
             "a failure must be retried, not remembered for the TTL"
         );
     }
+
+    // A panic elsewhere while the lock was held must not take the cache down
+    // with it: the map is still consistent (every write is one insert), so
+    // the cache keeps serving from it.
+    #[tokio::test]
+    async fn a_poisoned_lock_keeps_the_cache_working() {
+        let (cache, calls) = counting(false);
+        let cache = std::sync::Arc::new(cache);
+        let poisoner = std::sync::Arc::clone(&cache);
+        let _ = std::thread::spawn(move || {
+            let _held = poisoner.entries.lock().unwrap();
+            panic!("poisoning the cache lock on purpose");
+        })
+        .join();
+        assert!(cache.entries.is_poisoned());
+
+        cache.resolve("cred-a").await.expect("resolves");
+        cache
+            .resolve("cred-a")
+            .await
+            .expect("served from the cache");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
 }
