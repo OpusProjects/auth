@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0](https://github.com/OpusProjects/auth/compare/v0.2.0...v0.3.0) (2026-10-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* a service depends on auth-rs and secrets-rs instead of unified-auth and unified-secrets, and imports auth_rs:: and secrets_rs::.
+
+### Added
+
+* rename the crates to auth-rs and secrets-rs ([#8](https://github.com/OpusProjects/auth/issues/8)) ([529bdb9](https://github.com/OpusProjects/auth/commit/529bdb9222122daefb1daf335a532771b8dd6f85))
+
 ## [0.2.0](https://github.com/OpusProjects/unified-auth/compare/v0.1.0...v0.2.0) (2026-10-29)
 
 
