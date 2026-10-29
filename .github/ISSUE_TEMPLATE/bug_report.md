@@ -18,7 +18,7 @@ A clear description of the bug, and what you expected instead.
 
 ## Environment
 
-- unified-auth version (the tag a service pins, e.g. `v0.1.0`, or a commit SHA):
+- auth version (the tag a service pins, e.g. `v0.1.0`, or a commit SHA):
 - The service and its version (unified-api, unified-gitops):
 - Relevant config (redact secrets — the credential items, `server.ui.ldap`, ...):
 

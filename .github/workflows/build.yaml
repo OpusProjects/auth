@@ -1,4 +1,4 @@
-name: unified-auth CI
+name: auth CI
 
 on:
   push:

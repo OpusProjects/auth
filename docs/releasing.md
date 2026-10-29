@@ -150,7 +150,7 @@ gh workflow run build.yaml --ref release-please--branches--main
 
 A release here changes nothing in the services until each one names the new tag.
 
-In unified-api and unified-gitops, open a `build:` pull request (`build: unified-auth v0.2.0`) that
+In unified-api and unified-gitops, open a `build:` pull request (`build: move to auth v0.2.0`) that
 changes the `tag` of both `unified-secrets` and `unified-auth` in `Cargo.toml` and refreshes the
 lockfile:
 
