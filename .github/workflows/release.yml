@@ -40,6 +40,32 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # release-please bumps the workspace version in Cargo.toml but cannot
+      # edit Cargo.lock, where each crate repeats it. Refresh the two
+      # workspace entries on the release branch (nothing else moves:
+      # --workspace touches only this workspace's own crates), so the tagged
+      # lockfile matches the tagged version.
+      - uses: actions/checkout@v7
+        if: steps.rp.outputs.pr != ''
+        with:
+          ref: ${{ fromJSON(steps.rp.outputs.pr || '{}').headBranchName }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.rp.outputs.pr != ''
+
+      - name: Refresh Cargo.lock on the release PR
+        if: steps.rp.outputs.pr != ''
+        run: |
+          cargo update --workspace
+          if git diff --quiet Cargo.lock; then
+            echo "Cargo.lock already matches"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: refresh Cargo.lock for the release"
+          git push
+
       # The release PR's head was just pushed with GITHUB_TOKEN, which starts
       # no workflow: dispatch CI on it so the required checks report on the
       # PR's head commit and it can be merged.
