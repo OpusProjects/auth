@@ -8,10 +8,10 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 
-use unified_secrets::credential::Credential;
-use unified_secrets::env::EnvSecrets;
-use unified_secrets::port::SecretsPort;
-use unified_secrets::vault::{VaultConfig, VaultSecrets};
+use secrets_rs::credential::Credential;
+use secrets_rs::env::EnvSecrets;
+use secrets_rs::port::SecretsPort;
+use secrets_rs::vault::{VaultConfig, VaultSecrets};
 
 async fn fake_vault() -> String {
     let app = Router::new()

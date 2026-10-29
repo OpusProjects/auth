@@ -1,4 +1,4 @@
-// unified-auth — signing people in to the unified tools.
+// auth-rs — signing people in to a web service.
 //
 // A person logs in with their directory account (LDAP / Active Directory);
 // the directory says who they are and which groups they belong to, and the
@@ -15,7 +15,7 @@
 //   that checks them, browser sessions, CSRF — generic over each service's
 //   permissions type
 //
-// The service account's password comes through unified-secrets, like any
+// The service account's password comes through secrets-rs, like any
 // other credential. Shared by unified-api and unified-gitops: a fix here
 // lands in both.
 

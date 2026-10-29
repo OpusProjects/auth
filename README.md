@@ -9,8 +9,8 @@ A secrets and sign-in library for web services, written in Rust.
 Auth holds what a service needs to read a credential and to sign a person in, in one place, so a
 fix lands in every service that uses it at once instead of being copied from one to the next.
 
-Two crates in one workspace, released together under one tag: `unified-secrets` resolves credentials
-from environment variables, JSON files or HashiCorp Vault, and `unified-auth` signs people in with
+Two crates in one workspace, released together under one tag: `secrets-rs` resolves credentials
+from environment variables, JSON files or HashiCorp Vault, and `auth-rs` signs people in with
 their directory account or an API key and keeps them signed in with a browser session.
 
 ---
@@ -34,8 +34,8 @@ their directory account or an API key and keeps them signed in with a browser se
 
 | Document | What it covers |
 |---|---|
-| [Secrets](docs/secrets.md) | The `unified-secrets` crate: credentials, the backends, `build_chain` and caching |
-| [Sign-in](docs/sign-in.md) | The `unified-auth` crate: LDAP, access rules, the login, API keys, sessions |
+| [Secrets](docs/secrets.md) | The `secrets-rs` crate: credentials, the backends, `build_chain` and caching |
+| [Sign-in](docs/sign-in.md) | The `auth-rs` crate: LDAP, access rules, the login, API keys, sessions |
 | [Development](docs/development.md) | The workspace, the CI gates, and working on a service against a local copy |
 | [Releasing](docs/releasing.md) | How release-please cuts a version, and how a service moves to it |
 

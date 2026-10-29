@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use unified_secrets::SecretsPort;
+use secrets_rs::SecretsPort;
 
 use crate::directory::{DirectoryError, DirectoryLogin, DirectoryPort};
 use crate::ldap::{AccessRule, LdapConfig};
@@ -204,7 +204,7 @@ mod tests {
     use super::*;
     use crate::directory::{DirectoryFuture, DirectoryUser};
     use crate::ldap::rule_names;
-    use unified_secrets::mock::MockSecrets;
+    use secrets_rs::mock::MockSecrets;
 
     // A service's rules, reduced to what the use case needs: who they name,
     // and whether they make that person an admin.

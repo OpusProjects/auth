@@ -1,4 +1,4 @@
-// unified-secrets — resolving credentials for the unified tools.
+// secrets-rs — resolving credentials for a service.
 //
 // A credential is a reference written in configuration: it says WHERE its
 // values live (environment variables, a JSON file, a HashiCorp Vault KV v2

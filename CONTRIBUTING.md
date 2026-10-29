@@ -60,7 +60,7 @@ These crates are libraries two services build on; three rules keep them that way
    unified-api and unified-gitops against your branch (see
    [docs/development.md](docs/development.md#working-on-a-service-against-a-local-copy)).
 
-`unified-auth` depends on `unified-secrets`, never the reverse.
+`auth-rs` depends on `secrets-rs`, never the reverse.
 
 ## Code comments
 

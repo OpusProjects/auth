@@ -214,7 +214,7 @@ pub fn cookie_value<'h>(header: &'h str, name: &str) -> Option<&'h str> {
 
 // The store, injected as a router Extension the way the key registry is.
 // `new` rather than the tuple constructor, so a service's type alias
-// (`Sessions = unified_auth::http::Sessions<Permissions>`) can build one: Rust
+// (`Sessions = auth_rs::http::Sessions<Permissions>`) can build one: Rust
 // lets an alias name a type, but not call a tuple struct's constructor.
 pub struct Sessions<P>(pub Arc<SessionStore<P>>);
 
