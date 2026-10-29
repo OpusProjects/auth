@@ -5,7 +5,7 @@ resolver = "3"
 members = ["crates/unified-secrets", "crates/unified-auth"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 # MSRV, the same as the services that depend on these crates: a language
 # feature newer than their pinned toolchain must fail here first.
