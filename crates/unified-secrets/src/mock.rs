@@ -52,3 +52,17 @@ impl SecretsPort for MockSecrets {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // An id it was not given fails like a missing credential does.
+    #[tokio::test]
+    async fn answers_what_it_was_given_and_nothing_else() {
+        let secrets = MockSecrets::default().with("cred-a", [("token", "t")]);
+        assert_eq!(secrets.resolve("cred-a").await.unwrap()["token"], "t");
+        let err = secrets.resolve("cred-b").await.unwrap_err();
+        assert_eq!(err.message, "Mock: credential 'cred-b' not found");
+    }
+}

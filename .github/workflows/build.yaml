@@ -62,13 +62,16 @@ jobs:
       # suite while measuring, so tests run ONCE per PR — and the floor is
       # enforced by this required check, not by an advisory badge.
       #
-      # The floor is a ratchet against silent erosion, not a target: raise it
-      # when the number durably rises; never lower it to make a PR pass. The
-      # LDAP adapter's network half is exercised through the services' own
-      # integration tests against a directory, not here.
-      - name: tests + coverage floor
+      # Every line of both crates runs in a test, and this keeps it so: a PR
+      # that adds a line no test reaches fails here. Test code under tests/
+      # (the fake Vault and the fake LDAP directory) is not counted.
+      #
+      # pipefail: without it the step's status is tee's, and a coverage
+      # failure would pass the check.
+      - name: tests + coverage (every line)
         run: |
-          cargo llvm-cov --workspace --fail-under-lines 80 --summary-only | tee coverage.txt
+          set -o pipefail
+          cargo llvm-cov --workspace --fail-under-lines 100 --summary-only | tee coverage.txt
           {
             echo '### Coverage'
             echo '```'

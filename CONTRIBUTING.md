@@ -82,6 +82,6 @@ services pin and the GitHub Release. See [docs/releasing.md](docs/releasing.md).
 cargo test --workspace    # both crates; no directory, Vault or network needed
 ```
 
-The Vault tests answer from a local socket and the LDAP tests stop before any
-connection is made, so the suite needs no external services. See
-[docs/development.md](docs/development.md) for the layout and where new tests belong.
+The Vault tests talk to a fake Vault and the LDAP tests to a fake directory, both on
+`127.0.0.1`, so the suite needs no external services. Every line of both crates runs
+in a test, and CI keeps it that way: see [docs/development.md](docs/development.md#tests-and-coverage).

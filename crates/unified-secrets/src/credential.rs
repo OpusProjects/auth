@@ -242,4 +242,26 @@ mod tests {
         let result: Result<Credential, _> = serde_saphyr::from_str("type: token\nenv_var: {}\n");
         assert!(result.is_err());
     }
+
+    // As written after `type:`, so a message can quote it back.
+    #[test]
+    fn each_type_is_named_as_the_yaml_writes_it() {
+        for name in ["username_password", "token", "ssh_key", "vault"] {
+            assert_eq!(
+                credential(&format!("type: {name}\n"))
+                    .credential_type
+                    .name(),
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_or_only_paths_are_their_own_backends() {
+        let file = credential("type: token\nsecret_file: /run/x.json\nsecret_keys:\n  token: t\n");
+        assert_eq!(file.backend(), "file");
+        assert!(file.env_var_names().is_empty());
+        let paths = credential("type: ssh_key\nfile_keys:\n  ssh_key: /run/id_rsa\n");
+        assert_eq!(paths.backend(), "files");
+    }
 }

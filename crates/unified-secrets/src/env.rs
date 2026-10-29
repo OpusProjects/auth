@@ -465,4 +465,47 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    fn only(id: &str, yaml: &str) -> EnvSecrets {
+        let credential: Credential = serde_saphyr::from_str(yaml).unwrap();
+        EnvSecrets::new(HashMap::from([(id.to_string(), credential)]))
+    }
+
+    // secret_keys say which fields, but not where from: refused by name
+    // rather than read from nowhere.
+    #[tokio::test]
+    async fn secret_keys_without_a_place_to_read_them_are_refused() {
+        let env = only("cred-x", "type: token\nsecret_keys:\n  token: TOKEN\n");
+        let err = env.resolve("cred-x").await.unwrap_err();
+        assert_eq!(
+            err.message,
+            "Credential 'cred-x' has secret_keys but no env_prefix or secret_file"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unset_variable_is_named() {
+        let env = only(
+            "cred-x",
+            "type: token\nenv_vars:\n  token: UNIFIED_SECRETS_TEST_NEVER_SET\n",
+        );
+        let err = env.resolve("cred-x").await.unwrap_err();
+        assert_eq!(
+            err.message,
+            "Env var 'UNIFIED_SECRETS_TEST_NEVER_SET' not set"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unset_prefixed_variable_is_named() {
+        let env = only(
+            "cred-x",
+            "type: token\nenv_prefix: UNIFIED_SECRETS_TEST_NEVER\nsecret_keys:\n  token: SET\n",
+        );
+        let err = env.resolve("cred-x").await.unwrap_err();
+        assert_eq!(
+            err.message,
+            "Env var 'UNIFIED_SECRETS_TEST_NEVER_SET' not set"
+        );
+    }
 }

@@ -183,9 +183,10 @@ pub async fn ldap_login<R: AccessRule>(
     let username = user.username.as_deref().unwrap_or(username);
 
     let grant = R::grant_for(&config.access, username, &user.member_of).ok_or_else(|| {
+        let groups = user.member_of.len();
         tracing::warn!(
             username,
-            groups = user.member_of.len(),
+            groups,
             "LDAP login refused: no access rule names this user or their groups"
         );
         LoginError::NotAuthorized
@@ -331,10 +332,10 @@ mod tests {
         )
         .await
         .unwrap_err();
-        let LoginError::Unavailable(message) = err else {
-            panic!("expected Unavailable, got {err:?}");
-        };
-        assert!(message.contains("cred-ldap"), "{message}");
+        assert!(
+            matches!(&err, LoginError::Unavailable(message) if message.contains("cred-ldap")),
+            "{err:?}"
+        );
     }
 
     // The directory names whoever the filter found; rules follow that name.
@@ -390,5 +391,151 @@ mod tests {
         .await
         .expect("jdoe's rule");
         assert_eq!(logged.username, "jdoe");
+    }
+
+    // The bind credential resolves, but without the two fields a bind needs.
+    #[tokio::test]
+    async fn a_bind_credential_without_a_dn_and_password_is_named() {
+        let secrets = MockSecrets::new().with("cred-ldap", [("token", "x")]);
+        let err = ldap_login(&secrets, &OnePerson, &config(&["DL-ops"]), "jdoe", "x")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err,
+            LoginError::Unavailable(
+                "LDAP bind credential 'cred-ldap' must provide `username` (the bind DN) and `password`"
+                    .to_string()
+            )
+        );
+    }
+
+    // A directory that cannot answer.
+    struct Down;
+
+    impl DirectoryPort for Down {
+        fn authenticate<'a>(&'a self, _request: DirectoryLogin<'a>) -> DirectoryFuture<'a> {
+            Box::pin(async { Err(DirectoryError::Unavailable("connect: refused".to_string())) })
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_directory_is_unavailable_with_its_message() {
+        let err = ldap_login(&secrets(), &Down, &config(&["DL-ops"]), "jdoe", "x")
+            .await
+            .unwrap_err();
+        assert_eq!(err, LoginError::Unavailable("connect: refused".to_string()));
+    }
+
+    // The refusal is logged with how many groups the person had, so a missing
+    // group membership can be told from a missing rule.
+    #[tokio::test]
+    async fn a_refused_login_is_logged() {
+        // One process-wide subscriber: a thread-local one races the global
+        // interest cache of tests that log first without any.
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| tracing_subscriber::fmt().with_test_writer().init());
+        let err = ldap_login(
+            &secrets(),
+            &OnePerson,
+            &config(&["DL-other"]),
+            "jdoe",
+            "right-password",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err, LoginError::NotAuthorized);
+    }
+
+    async fn throttled(
+        throttle: &LoginThrottle,
+        directory: &dyn DirectoryPort,
+        password: &str,
+    ) -> Result<LoggedIn<Grant>, LoginError> {
+        throttled_ldap_login(
+            throttle,
+            &secrets(),
+            directory,
+            &config(&["DL-ops"]),
+            "jdoe",
+            password,
+        )
+        .await
+    }
+
+    // Five wrong passwords, then the account is refused without asking the
+    // directory, even with the right one, until the window passes.
+    #[tokio::test(start_paused = true)]
+    async fn too_many_failures_lock_the_form_not_the_account() {
+        let throttle = LoginThrottle::default();
+        for _ in 0..MAX_FAILURES {
+            assert_eq!(
+                throttled(&throttle, &OnePerson, "nope").await.unwrap_err(),
+                LoginError::InvalidCredentials
+            );
+        }
+        assert_eq!(
+            throttled(&throttle, &OnePerson, "right-password")
+                .await
+                .unwrap_err(),
+            LoginError::TooManyAttempts
+        );
+
+        // The window has passed: the stale count is forgotten, and asked again.
+        throttle.failures.lock().unwrap().insert(
+            LoginThrottle::key("jdoe"),
+            (MAX_FAILURES, Instant::now() - FAILURE_WINDOW),
+        );
+        assert!(
+            throttled(&throttle, &OnePerson, "right-password")
+                .await
+                .is_ok()
+        );
+    }
+
+    // Every wrong password takes the same total time, however early it failed.
+    #[tokio::test(start_paused = true)]
+    async fn a_wrong_password_answers_after_the_failure_duration() {
+        let throttle = LoginThrottle::default();
+        let started = tokio::time::Instant::now();
+        throttled(&throttle, &OnePerson, "nope").await.unwrap_err();
+        assert!(started.elapsed() >= FAILURE_DURATION);
+    }
+
+    // A success forgets earlier failures; names are counted case-insensitively.
+    #[tokio::test(start_paused = true)]
+    async fn a_success_clears_the_failures() {
+        let throttle = LoginThrottle::default();
+        throttled(&throttle, &OnePerson, "nope").await.unwrap_err();
+        assert!(throttle.failures.lock().unwrap().contains_key("jdoe"));
+        throttled(&throttle, &OnePerson, "right-password")
+            .await
+            .unwrap();
+        assert!(throttle.failures.lock().unwrap().is_empty());
+        assert_eq!(LoginThrottle::key(" JDoe "), "jdoe");
+    }
+
+    // An outage is neither a failure nor a success: nothing is counted.
+    #[tokio::test]
+    async fn an_outage_counts_nothing() {
+        let throttle = LoginThrottle::default();
+        throttled(&throttle, &Down, "x").await.unwrap_err();
+        assert!(throttle.failures.lock().unwrap().is_empty());
+    }
+
+    // With every slot taken, a login waits five seconds, then says so.
+    #[tokio::test(start_paused = true)]
+    async fn a_full_house_is_busy() {
+        let throttle = LoginThrottle::default();
+        let _all = throttle
+            .in_flight
+            .acquire_many(MAX_CONCURRENT as u32)
+            .await
+            .unwrap();
+        assert_eq!(
+            throttled(&throttle, &OnePerson, "right-password")
+                .await
+                .unwrap_err(),
+            LoginError::Busy
+        );
     }
 }

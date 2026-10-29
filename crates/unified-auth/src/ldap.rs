@@ -241,6 +241,8 @@ mod tests {
             Some("Ops\\, Spain")
         );
         assert_eq!(common_name("OU=Groups,DC=x"), None);
+        assert_eq!(common_name("CN=standalone"), Some("standalone"));
+        assert_eq!(common_name("no attribute at all"), None);
     }
 
     #[test]
@@ -248,6 +250,10 @@ mod tests {
         assert_eq!(
             user_filter("(sAMAccountName={username})", "*)(uid=*"),
             "(sAMAccountName=\\2a\\29\\28uid=\\2a)"
+        );
+        assert_eq!(
+            user_filter("(uid={username})", "a\\b\0c"),
+            "(uid=a\\5cb\\00c)"
         );
     }
 

@@ -43,3 +43,35 @@ impl SecretsSwapPort for ReloadableSecrets {
         *self.inner.write().expect("secrets chain lock") = next;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mock::MockSecrets;
+
+    // A swap changes what the next resolution reads; nothing else moves.
+    #[tokio::test]
+    async fn a_replaced_chain_answers_the_next_resolution() {
+        let chain = ReloadableSecrets::new(Arc::new(
+            MockSecrets::new().with("cred-a", [("token", "old")]),
+        ));
+        assert_eq!(chain.resolve("cred-a").await.unwrap()["token"], "old");
+
+        chain.replace(Arc::new(
+            MockSecrets::new().with("cred-a", [("token", "new")]),
+        ));
+        assert_eq!(chain.resolve("cred-a").await.unwrap()["token"], "new");
+    }
+
+    // A resolution already started keeps the chain it started with.
+    #[tokio::test]
+    async fn a_resolution_in_flight_keeps_its_chain() {
+        let chain = ReloadableSecrets::new(Arc::new(
+            MockSecrets::new().with("cred-a", [("token", "old")]),
+        ));
+        let pending = chain.resolve("cred-a");
+        chain.replace(Arc::new(MockSecrets::new()));
+        assert_eq!(pending.await.unwrap()["token"], "old");
+        assert!(chain.resolve("cred-a").await.is_err());
+    }
+}
