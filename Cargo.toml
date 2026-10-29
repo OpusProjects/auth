@@ -11,7 +11,7 @@ edition = "2024"
 # feature newer than their pinned toolchain must fail here first.
 rust-version = "1.96"
 license = "Apache-2.0"
-repository = "https://github.com/OpusProjects/unified-auth"
+repository = "https://github.com/OpusProjects/auth"
 
 # Versions the crates share, declared once (crates name them with
 # `workspace = true`), so the two can never resolve different majors.

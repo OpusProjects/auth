@@ -1,14 +1,13 @@
-# Unified Auth
+# Auth
 
-[![unified-auth CI](https://github.com/OpusProjects/unified-auth/actions/workflows/build.yaml/badge.svg)](https://github.com/OpusProjects/unified-auth/actions/workflows/build.yaml)
+[![auth CI](https://github.com/OpusProjects/auth/actions/workflows/build.yaml/badge.svg)](https://github.com/OpusProjects/auth/actions/workflows/build.yaml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-edition%202024-orange.svg?logo=rust)](https://www.rust-lang.org/)
 
-Secrets and sign-in shared by the unified tools, written in Rust.
+A secrets and sign-in library for web services, written in Rust.
 
-Unified Auth holds the code [unified-api](https://github.com/OpusProjects/unified-api) and
-[unified-gitops](https://github.com/OpusProjects/unified-gitops) both need to read a credential and
-to sign a person in, so a fix to either lands in both tools at once instead of being copied by hand.
+Auth holds what a service needs to read a credential and to sign a person in, in one place, so a
+fix lands in every service that uses it at once instead of being copied from one to the next.
 
 Two crates in one workspace, released together under one tag: `unified-secrets` resolves credentials
 from environment variables, JSON files or HashiCorp Vault, and `unified-auth` signs people in with
@@ -27,7 +26,7 @@ their directory account or an API key and keeps them signed in with a browser se
 - **Login throttle**: per-account failure limit, equal timing for wrong users and passwords
 - **API key middleware**: constant-time key check, keys swappable by a reload, open when none
 - **Browser sessions**: in memory, revoked with their key or the LDAP block, CSRF on every write
-- **Pinned by tag**: the services depend on a `vX.Y.Z` tag of this repository, never on `main`
+- **Pinned by tag**: a service depends on a `vX.Y.Z` tag of this repository, never on `main`
 
 ---
 
@@ -38,7 +37,7 @@ their directory account or an API key and keeps them signed in with a browser se
 | [Secrets](docs/secrets.md) | The `unified-secrets` crate: credentials, the backends, `build_chain` and caching |
 | [Sign-in](docs/sign-in.md) | The `unified-auth` crate: LDAP, access rules, the login, API keys, sessions |
 | [Development](docs/development.md) | The workspace, the CI gates, and working on a service against a local copy |
-| [Releasing](docs/releasing.md) | How release-please cuts a version, and how the services move to it |
+| [Releasing](docs/releasing.md) | How release-please cuts a version, and how a service moves to it |
 
 ---
 

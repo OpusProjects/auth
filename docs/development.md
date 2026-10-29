@@ -51,8 +51,8 @@ than their pinned toolchain must fail here, not in their builds.
 unified-api and unified-gitops name a release tag of this repository in their `Cargo.toml`.
 
 ```toml
-unified-secrets = { git = "https://github.com/OpusProjects/unified-auth", tag = "v0.1.0" }
-unified-auth = { git = "https://github.com/OpusProjects/unified-auth", tag = "v0.1.0" }
+unified-secrets = { git = "https://github.com/OpusProjects/auth", tag = "v0.1.0" }
+unified-auth = { git = "https://github.com/OpusProjects/auth", tag = "v0.1.0" }
 ```
 
 Both lines name the same tag: the crates are released together. The services' `deny.toml` allows
@@ -67,13 +67,13 @@ and its `Cargo.lock` (`cargo update -p unified-secrets -p unified-auth`).
 
 A change here is a change in both services, so build them against it before it is merged.
 
-With unified-auth checked out next to the service, add a `[patch]` section to the service's
+With auth checked out next to the service, add a `[patch]` section to the service's
 `Cargo.toml` **without committing it**:
 
 ```toml
-[patch."https://github.com/OpusProjects/unified-auth"]
-unified-secrets = { path = "../unified-auth/crates/unified-secrets" }
-unified-auth = { path = "../unified-auth/crates/unified-auth" }
+[patch."https://github.com/OpusProjects/auth"]
+unified-secrets = { path = "../auth/crates/unified-secrets" }
+unified-auth = { path = "../auth/crates/unified-auth" }
 ```
 
 Then run the service's own gates (`cargo clippy --all-targets -- -D warnings` and `cargo test`):
