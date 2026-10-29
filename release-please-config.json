@@ -66,11 +66,6 @@
           "type": "toml",
           "path": "Cargo.toml",
           "jsonpath": "$.workspace.package.version"
-        },
-        {
-          "type": "toml",
-          "path": "Cargo.lock",
-          "jsonpath": "$.package[?(@.name==='unified-auth' || @.name==='unified-secrets')].version"
         }
       ]
     }
