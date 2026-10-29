@@ -12,7 +12,7 @@ to sign a person in, so a fix to either lands in both tools at once instead of b
 
 Two crates in one workspace, released together under one tag: `unified-secrets` resolves credentials
 from environment variables, JSON files or HashiCorp Vault, and `unified-auth` signs people in with
-their directory account.
+their directory account or an API key and keeps them signed in with a browser session.
 
 ---
 
@@ -25,6 +25,8 @@ their directory account.
 - **LDAP / Active Directory sign-in**: search-then-bind, StartTLS or LDAPS, a private CA
 - **Access rules stay the service's own**: any rule type, matched by user name or group
 - **Login throttle**: per-account failure limit, equal timing for wrong users and passwords
+- **API key middleware**: constant-time key check, keys swappable by a reload, open when none
+- **Browser sessions**: in memory, revoked with their key or the LDAP block, CSRF on every write
 - **Pinned by tag**: the services depend on a `vX.Y.Z` tag of this repository, never on `main`
 
 ---
@@ -34,7 +36,7 @@ their directory account.
 | Document | What it covers |
 |---|---|
 | [Secrets](docs/secrets.md) | The `unified-secrets` crate: credentials, the backends, `build_chain` and caching |
-| [Sign-in](docs/sign-in.md) | The `unified-auth` crate: the LDAP block, access rules, the login use case |
+| [Sign-in](docs/sign-in.md) | The `unified-auth` crate: LDAP, access rules, the login, API keys, sessions |
 | [Development](docs/development.md) | The workspace, the CI gates, and working on a service against a local copy |
 | [Releasing](docs/releasing.md) | How release-please cuts a version, and how the services move to it |
 

@@ -1,7 +1,8 @@
 # Sign-in
 
 The `unified-auth` crate: signing a person in with their directory account (LDAP or Active
-Directory), and deciding what that gets them through the service's own access rules.
+Directory), deciding what that gets them through the service's own access rules, and authenticating
+every request after that, by API key or by browser session.
 
 The YAML a person writes (`server.ui.ldap` in a service's `config.yaml`) is documented in each
 service's `docs/ldap-login.md`; this page is the crate behind it.
@@ -12,12 +13,15 @@ service's `docs/ldap-login.md`; this page is the crate behind it.
 - [The login use case](#the-login-use-case)
 - [The throttle](#the-throttle)
 - [The directory adapter](#the-directory-adapter)
+- [API keys and the middleware](#api-keys-and-the-middleware)
+- [Browser sessions](#browser-sessions)
+- [Mounting it in a service](#mounting-it-in-a-service)
 
 ---
 
 ## Modules
 
-Four modules: a port, its LDAP adapter, the configuration block, and the use case that joins them.
+A port, its LDAP adapter, the configuration block and the use case that joins them, then the HTTP side.
 
 | Module | What it holds |
 |---|---|
@@ -25,6 +29,9 @@ Four modules: a port, its LDAP adapter, the configuration block, and the use cas
 | `ldap_directory` | `LdapDirectory`, the `DirectoryPort` that talks to an LDAP server through `ldap3` |
 | `ldap` | `LdapConfig<R>`, `LdapServer`, the `AccessRule` trait, `rule_names` and `user_filter` |
 | `login` | `ldap_login`, `throttled_ldap_login`, `LoginThrottle`, `LoggedIn<G>`, `LoginError` |
+| `http::auth` | `ResolvedApiKey<P>`, `ApiKeyRegistry<P>`, `require_api_key`, `AuthContext<P>`, `Rejection` |
+| `http::session` | `SessionStore<P>`, `SessionKind`, `form_action`, `csrf_matches`, `cookie_value`, `new_token` |
+| `http` | The `Permission` trait each service's permissions type implements |
 
 The bind credential is resolved through a `unified_secrets::SecretsPort`, like any other credential.
 
@@ -117,3 +124,67 @@ unauthenticated bind. `ldaps://` and `starttls: true` use rustls; `ca_file` trus
 in that PEM file for a private CA, and is otherwise the system's trust store. One connection per
 login, closed straight after: logins are rare, and a pooled connection would sit bound as the last
 person who logged in.
+
+---
+
+## API keys and the middleware
+
+`require_api_key` authenticates every request and leaves an `AuthContext<P>` for the handlers to check.
+
+| The request carries | It authenticates as |
+|---|---|
+| `X-API-Key: <secret>` or `Authorization: Bearer <secret>` | That key, compared in constant time against every key |
+| The session cookie, and no key | The session; a write (or a `refresh=true` read) also needs its CSRF token |
+| Nothing, with no keys configured | Everyone, as `P::admin()`: the instance runs open |
+| Anything else | Refused: `Rejection::MissingApiKey`, `InvalidApiKey` or `CsrfRequired` |
+
+The keys live in an `ApiKeyRegistry<P>` read on every request, so a reload that calls `replace` is
+in force on the next one. A key has an `id` (its `name` in api_keys.yaml) and a `name` (its label);
+the label is what the access log and `AuthContext::key_name` show. The middleware never decides
+what a key may touch: a handler asks the permissions in `AuthContext` about the id it serves.
+
+---
+
+## Browser sessions
+
+A browser cannot attach a header to a navigation, so signing in to the console opens a session.
+
+`SessionStore<P>` keeps them in memory, so a restart signs everyone out and a key revoked while
+the process was down stays revoked. Each session has a random 256-bit token (the cookie) and a
+separate CSRF token, and records how it was opened, which decides what ends it:
+
+- **`SessionKind::ApiKey`**: ended by `retain_keys` when its key's `id` leaves the configuration.
+- **`SessionKind::Directory`**: ended by `end_directory_sessions` when the LDAP block changes.
+
+`form_action` makes an HTML form usable against the API: it lifts `_csrf` out of the body for the
+middleware, moves the other fields to the query, and turns `_method=DELETE` into a DELETE, but only
+for a request that carries the session cookie, so a cross-site form cannot reach a DELETE route.
+
+---
+
+## Mounting it in a service
+
+A service names its own permissions type and cookie, and keeps its error shape and its pages.
+
+```rust
+impl unified_auth::http::Permission for Permissions {
+    fn admin() -> Self {
+        Permissions::Admin
+    }
+}
+
+pub type ApiKeys = unified_auth::http::ApiKeys<Permissions>;
+pub type AuthContext = unified_auth::http::AuthContext<Permissions>;
+
+// `middleware::from_fn` takes a function of the request and `next`: this
+// passes the cookie name and renders a refusal as the service's ApiError.
+pub async fn require_api_key(request: Request, next: Next) -> Result<Response, ApiError> {
+    unified_auth::http::require_api_key::<Permissions>(COOKIE_NAME, request, next)
+        .await
+        .map_err(ApiError::from)
+}
+```
+
+What stays in the service: how api_keys.yaml becomes `ResolvedApiKey`s (its fields and the legacy
+admin-key variable), the sign-in page and its routes, and the Users page. They show the service's
+own names and scopes, so they are not generic.

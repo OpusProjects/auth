@@ -1,6 +1,6 @@
 [package]
 name = "unified-auth"
-description = "Sign-in for the unified tools: LDAP directory accounts, access rules and a throttled login"
+description = "Sign-in for the unified tools: LDAP accounts, access rules, a throttled login, API keys and browser sessions"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,8 +19,14 @@ rustls-pki-types.workspace = true
 serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+axum.workspace = true
+dashmap.workspace = true
+getrandom.workspace = true
+subtle.workspace = true
 
 [dev-dependencies]
+# to call a router as a service (no TCP)
+tower.workspace = true
 serde-saphyr.workspace = true
 # tokio virtual time (start_paused) for the throttle's delays, and a log
 # subscriber so the fields of a logged refusal are evaluated

@@ -20,7 +20,7 @@ One Cargo workspace with two crates, sharing one version and one `Cargo.lock`.
 Cargo.toml                    # the workspace: members, shared version, shared dependency versions
 crates/
 ├── unified-secrets/src/      # credential, port, env, vault, cache, reloadable, chain, mock
-└── unified-auth/src/         # directory, ldap_directory, ldap, login
+└── unified-auth/src/         # directory, ldap_directory, ldap, login, http/ (auth, session)
 docs/                         # this documentation
 release-please-config.json    # release-please: version files, changelog sections
 .release-please-manifest.json # the last released version
@@ -89,7 +89,7 @@ New code goes in the crate whose job it is, with its tests in the same file.
 - **A new secrets backend:** a `SecretsPort` adapter in `unified-secrets`, and a route to it in
   `chain.rs`. The YAML fields it adds belong on `Credential`, strict like the rest.
 - **A new way to sign in:** a `DirectoryPort` adapter, or a new use case beside `login.rs`, in
-  `unified-auth`.
+  `unified-auth`; a new way to authenticate a request belongs in its `http` module.
 - **Anything one service needs and the other does not:** in that service, not here.
 
 Every new line comes with the test that runs it; see [Tests and coverage](#tests-and-coverage).
