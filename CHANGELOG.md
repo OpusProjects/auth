@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0](https://github.com/OpusProjects/unified-auth/compare/v0.1.0...v0.2.0) (2026-10-29)
+
+
+### Added
+
+* share API key authentication and browser sessions ([#5](https://github.com/OpusProjects/unified-auth/issues/5)) ([76ba507](https://github.com/OpusProjects/unified-auth/commit/76ba5071da452e9250fe3e83009ca63f1e1d9352))
+
 ## 0.1.0 (2026-10-29)
 
 
