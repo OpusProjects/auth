@@ -1,0 +1,102 @@
+name: unified-auth CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # The release PR is pushed by release-please with GITHUB_TOKEN, and GitHub
+  # starts no workflow from such a push — its required checks would never
+  # report. workflow_dispatch is the one event GITHUB_TOKEN may start, so
+  # release.yml dispatches this workflow on the release branch, and the runs
+  # land on the PR's head commit. Also usable by hand from the Actions tab.
+  workflow_dispatch:
+  # Advisories move while the lockfile stands still: a RUSTSEC entry published
+  # against an unchanged Cargo.lock would otherwise go unnoticed until the
+  # next PR happens to run the audit job. The nightly run re-checks the tip of
+  # main; only audit and deny run on it (the test job gates on event_name).
+  schedule:
+    - cron: '30 5 * * *'
+
+# One live run per PR: a push to a PR branch supersedes the run still going
+# on its previous commit. Pushes, dispatches and the nightly schedule never
+# cancel, they queue.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    # The nightly schedule exists for the advisory checks; build/test state
+    # cannot change without a commit, so re-running them would be noise.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt, llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - run: cargo fmt --check
+
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # The workspace's rust-version is the services' MSRV: they pin these
+      # crates, so a language feature newer than their toolchain must fail
+      # here, not in their builds. Checked under the pin itself, read from
+      # Cargo.toml so the workflow cannot drift from the declared MSRV.
+      - name: cargo check under the MSRV toolchain
+        run: |
+          MSRV="$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)"
+          rustup toolchain install "$MSRV" --profile minimal
+          cargo "+$MSRV" check --workspace --all-targets
+
+      # One instrumented run does both jobs: cargo-llvm-cov executes the whole
+      # suite while measuring, so tests run ONCE per PR — and the floor is
+      # enforced by this required check, not by an advisory badge.
+      #
+      # The floor is a ratchet against silent erosion, not a target: raise it
+      # when the number durably rises; never lower it to make a PR pass. The
+      # LDAP adapter's network half is exercised through the services' own
+      # integration tests against a directory, not here.
+      - name: tests + coverage floor
+        run: |
+          cargo llvm-cov --workspace --fail-under-lines 80 --summary-only | tee coverage.txt
+          {
+            echo '### Coverage'
+            echo '```'
+            tail -n 3 coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Scans Cargo.lock against the RUSTSEC advisory database, failing on
+      # known-vulnerable dependency versions; ignored advisories (with
+      # rationale) live in .cargo/audit.toml.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - run: cargo audit
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # License vetting and source hygiene on top of the advisory scan:
+      # a dependency bump cannot quietly pull in a copyleft license or an
+      # unapproved git/registry source. Policy lives in deny.toml.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check

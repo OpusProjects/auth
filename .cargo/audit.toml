@@ -1,0 +1,5 @@
+# cargo-audit configuration, honored by both local `cargo audit` and the
+# audit CI job.
+[advisories]
+# No exceptions: every advisory in the tree fails the build.
+ignore = []

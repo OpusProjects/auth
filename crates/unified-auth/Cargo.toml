@@ -1,0 +1,24 @@
+[package]
+name = "unified-auth"
+description = "Sign-in for the unified tools: LDAP directory accounts, access rules and a throttled login"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+# Consumed by git tag from unified-api and unified-gitops — never published
+# to crates.io
+publish = false
+
+[dependencies]
+unified-secrets.workspace = true
+ldap3.workspace = true
+rustls.workspace = true
+rustls-pki-types.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+serde-saphyr.workspace = true

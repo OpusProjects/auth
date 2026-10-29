@@ -1,0 +1,35 @@
+# Two crates, one version: unified-api and unified-gitops pin this repository
+# by tag, so both crates move together and a tag names one consistent pair.
+[workspace]
+resolver = "3"
+members = ["crates/unified-secrets", "crates/unified-auth"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+# MSRV, the same as the services that depend on these crates: a language
+# feature newer than their pinned toolchain must fail here first.
+rust-version = "1.96"
+license = "Apache-2.0"
+repository = "https://github.com/OpusProjects/unified-auth"
+
+# Versions the crates share, declared once (crates name them with
+# `workspace = true`), so the two can never resolve different majors.
+[workspace.dependencies]
+unified-secrets = { path = "crates/unified-secrets" }
+# Vault's HTTP API. rustls instead of openssl to keep the build self-contained,
+# the same stack the services already use.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-saphyr = "2"       # pure-Rust YAML reader (no unsafe-libyaml)
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+# LDAP sign-in: bind, look the user up, bind as them. rustls on ring, so no
+# OpenSSL comes with it.
+ldap3 = { version = "0.12.1", default-features = false, features = ["tls-rustls-ring"] }
+# A private CA for the directory (`ca_file`): the TLS config is built here and
+# handed to ldap3. Both crates are already in the tree through ldap3 and reqwest.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+tempfile = "3"

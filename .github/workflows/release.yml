@@ -1,0 +1,56 @@
+name: Release
+
+# release-please keeps ONE open pull request, "chore: release vX.Y.Z", up to
+# date with every merge into main: it computes the next version from the
+# Conventional Commit titles of the squashed pull requests, bumps the
+# workspace version in Cargo.toml and Cargo.lock, and writes the CHANGELOG
+# section. Merging that pull request is the release: this same workflow then
+# creates the tag and the GitHub Release, the tag the services pin. See
+# docs/releasing.md.
+#
+# Everything runs as github-actions[bot] with GITHUB_TOKEN. GitHub starts no
+# workflow from what that token pushes, so the release PR would never get its
+# required checks: they are dispatched explicitly below.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write # the autorelease labels on the release PR
+      actions: write # dispatching CI on the release branch
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: rp
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # The release PR's head was just pushed with GITHUB_TOKEN, which starts
+      # no workflow: dispatch CI on it so the required checks report on the
+      # PR's head commit and it can be merged.
+      - name: Run CI on the release PR
+        if: steps.rp.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read in the shell: an expression's fromJSON() is evaluated even when
+          # the step is skipped, and fails on the empty output of a run with no PR.
+          PR: ${{ steps.rp.outputs.pr }}
+        run: |
+          BRANCH="$(jq -r .headBranchName <<<"$PR")"
+          gh workflow run build.yaml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          echo "CI dispatched on $BRANCH"
