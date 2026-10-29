@@ -11,12 +11,16 @@
 //   rules implement, and the group matching they all use
 // - `login`: the use case — bind credential, directory, rules — behind a
 //   throttle that slows password guessing
+// - `http`: what a signed-in request carries — API keys and the middleware
+//   that checks them, browser sessions, CSRF — generic over each service's
+//   permissions type
 //
 // The service account's password comes through unified-secrets, like any
 // other credential. Shared by unified-api and unified-gitops: a fix here
 // lands in both.
 
 pub mod directory;
+pub mod http;
 pub mod ldap;
 pub mod ldap_directory;
 pub mod login;
