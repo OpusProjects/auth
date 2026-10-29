@@ -1,6 +1,6 @@
 [package]
-name = "unified-auth"
-description = "Sign-in for the unified tools: LDAP accounts, access rules, a throttled login, API keys and browser sessions"
+name = "auth-rs"
+description = "Sign-in for web services: LDAP accounts, access rules, a throttled login, API keys and browser sessions"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,7 +12,7 @@ readme = "../../README.md"
 publish = false
 
 [dependencies]
-unified-secrets.workspace = true
+secrets-rs.workspace = true
 ldap3.workspace = true
 rustls.workspace = true
 rustls-pki-types.workspace = true

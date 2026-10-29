@@ -151,11 +151,11 @@ gh workflow run build.yaml --ref release-please--branches--main
 A release here changes nothing in the services until each one names the new tag.
 
 In unified-api and unified-gitops, open a `build:` pull request (`build: move to auth v0.2.0`) that
-changes the `tag` of both `unified-secrets` and `unified-auth` in `Cargo.toml` and refreshes the
+changes the `tag` of both `secrets-rs` and `auth-rs` in `Cargo.toml` and refreshes the
 lockfile:
 
 ```bash
-cargo update -p unified-secrets -p unified-auth
+cargo update -p secrets-rs -p auth-rs
 ```
 
 The service's CI is the check that the release works there. A release that changes what a person

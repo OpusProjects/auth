@@ -4,10 +4,10 @@
 // directory, no network.
 use std::sync::Once;
 
+use auth_rs::directory::{DirectoryError, DirectoryLogin, DirectoryPort, DirectoryUser};
+use auth_rs::ldap::LdapServer;
+use auth_rs::ldap_directory::LdapDirectory;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use unified_auth::directory::{DirectoryError, DirectoryLogin, DirectoryPort, DirectoryUser};
-use unified_auth::ldap::LdapServer;
-use unified_auth::ldap_directory::LdapDirectory;
 
 // One process-wide log subscriber, so every logged field is evaluated the
 // same way whichever test happens to reach a log line first.

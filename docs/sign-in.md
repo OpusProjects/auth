@@ -1,6 +1,6 @@
 # Sign-in
 
-The `unified-auth` crate: signing a person in with their directory account (LDAP or Active
+The `auth-rs` crate: signing a person in with their directory account (LDAP or Active
 Directory), deciding what that gets them through the service's own access rules, and authenticating
 every request after that, by API key or by browser session.
 
@@ -33,7 +33,7 @@ A port, its LDAP adapter, the configuration block and the use case that joins th
 | `http::session` | `SessionStore<P>`, `SessionKind`, `form_action`, `csrf_matches`, `cookie_value`, `new_token` |
 | `http` | The `Permission` trait each service's permissions type implements |
 
-The bind credential is resolved through a `unified_secrets::SecretsPort`, like any other credential.
+The bind credential is resolved through a `secrets_rs::SecretsPort`, like any other credential.
 
 ---
 
@@ -47,7 +47,7 @@ rule grants is not: unified-api's restricted rules list `sources` and `endpoints
 list `applications`. So each service keeps its own rule struct and names the block with it:
 
 ```rust
-pub type LdapConfig = unified_auth::LdapConfig<AccessRule>; // in the service's domain/ldap.rs
+pub type LdapConfig = auth_rs::LdapConfig<AccessRule>; // in the service's domain/ldap.rs
 ```
 
 The block stays strict: it carries `deny_unknown_fields`, and so should the service's rule type.
@@ -60,11 +60,11 @@ The block stays strict: it carries `deny_unknown_fields`, and so should the serv
 A service's rule type implements one trait: given every rule and one person, what do they get.
 
 ```rust
-impl unified_auth::AccessRule for AccessRule {
+impl auth_rs::AccessRule for AccessRule {
     type Grant = Grant; // the service's own: Admin, or the ids a restricted rule lists
 
     fn grant_for(rules: &[Self], username: &str, member_of: &[String]) -> Option<Grant> {
-        // for each rule with unified_auth::rule_names(&rule.users, &rule.groups, username, member_of):
+        // for each rule with auth_rs::rule_names(&rule.users, &rule.groups, username, member_of):
         // admin anywhere is admin; otherwise union the scoped lists
     }
 }
@@ -167,19 +167,19 @@ for a request that carries the session cookie, so a cross-site form cannot reach
 A service names its own permissions type and cookie, and keeps its error shape and its pages.
 
 ```rust
-impl unified_auth::http::Permission for Permissions {
+impl auth_rs::http::Permission for Permissions {
     fn admin() -> Self {
         Permissions::Admin
     }
 }
 
-pub type ApiKeys = unified_auth::http::ApiKeys<Permissions>;
-pub type AuthContext = unified_auth::http::AuthContext<Permissions>;
+pub type ApiKeys = auth_rs::http::ApiKeys<Permissions>;
+pub type AuthContext = auth_rs::http::AuthContext<Permissions>;
 
 // `middleware::from_fn` takes a function of the request and `next`: this
 // passes the cookie name and renders a refusal as the service's ApiError.
 pub async fn require_api_key(request: Request, next: Next) -> Result<Response, ApiError> {
-    unified_auth::http::require_api_key::<Permissions>(COOKIE_NAME, request, next)
+    auth_rs::http::require_api_key::<Permissions>(COOKIE_NAME, request, next)
         .await
         .map_err(ApiError::from)
 }

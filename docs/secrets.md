@@ -1,6 +1,6 @@
 # Secrets
 
-The `unified-secrets` crate: how a service turns a credential item into the values a script or a
+The `secrets-rs` crate: how a service turns a credential item into the values a script or a
 login needs. The principle every service follows: **configuration never holds a secret**.
 
 A credential describes *where* each value lives, and the infrastructure (env vars, mounted files,
@@ -31,7 +31,7 @@ The crate is a port, its adapters, and the one function that wires them together
 | `chain` | `build_chain` and `SecretsConfig`, the deprecated `secrets:` block of `config.yaml` |
 | `mock` | `MockSecrets`, the test double |
 
-The names a service uses most are re-exported at the crate root: `unified_secrets::{Credential,
+The names a service uses most are re-exported at the crate root: `secrets_rs::{Credential,
 CredentialType, SecretsPort, SecretsError, SecretsConfig, build_chain}`.
 
 ---
@@ -64,7 +64,7 @@ A service builds one `SecretsPort` from its loaded credentials, and resolves eve
 
 ```rust
 let secrets: Arc<dyn SecretsPort> =
-    unified_secrets::build_chain(&config.credentials, &config.secrets_config);
+    secrets_rs::build_chain(&config.credentials, &config.secrets_config);
 let values = secrets.resolve("cred-vcenter-aa1").await?; // {"username": ..., "password": ...}
 ```
 
@@ -113,7 +113,7 @@ chain with one built from the new configuration. Resolutions already running fin
 `MockSecrets` answers from a map, so a service's tests need no environment variables or Vault.
 
 ```rust
-let secrets = unified_secrets::mock::MockSecrets::new()
+let secrets = secrets_rs::mock::MockSecrets::new()
     .with("cred-ldap", [("username", "CN=svc"), ("password", "secret")]);
 ```
 

@@ -2,7 +2,7 @@
 # by tag, so both crates move together and a tag names one consistent pair.
 [workspace]
 resolver = "3"
-members = ["crates/unified-secrets", "crates/unified-auth"]
+members = ["crates/secrets-rs", "crates/auth-rs"]
 
 [workspace.package]
 version = "0.2.0"
@@ -16,7 +16,7 @@ repository = "https://github.com/OpusProjects/auth"
 # Versions the crates share, declared once (crates name them with
 # `workspace = true`), so the two can never resolve different majors.
 [workspace.dependencies]
-unified-secrets = { path = "crates/unified-secrets" }
+secrets-rs = { path = "crates/secrets-rs" }
 # Vault's HTTP API. rustls instead of openssl to keep the build self-contained,
 # the same stack the services already use.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }

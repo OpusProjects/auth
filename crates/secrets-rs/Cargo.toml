@@ -1,6 +1,6 @@
 [package]
-name = "unified-secrets"
-description = "Credential resolution for the unified tools: environment variables, JSON files and HashiCorp Vault"
+name = "secrets-rs"
+description = "Credential resolution for services: environment variables, JSON files and HashiCorp Vault"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
