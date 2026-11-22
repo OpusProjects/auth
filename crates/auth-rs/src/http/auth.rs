@@ -590,6 +590,22 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        // Nor is a Cookie header that is not text (a byte outside visible
+        // ASCII): it is skipped, not an error.
+        let (app, _) = with_session(SessionKind::ApiKey);
+        let unreadable = axum::http::HeaderValue::from_bytes(b"test_session=\xff").unwrap();
+        let resp = app
+            .oneshot(
+                HttpRequest::builder()
+                    .uri("/protected")
+                    .header("cookie", unreadable)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     // A key in a header wins over a cookie the browser happens to hold.
