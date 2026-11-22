@@ -68,14 +68,18 @@ jobs:
       #
       # pipefail: without it the step's status is tee's, and a coverage
       # failure would pass the check.
+      #
+      # --show-missing-lines: a failing run names the file and line numbers
+      # no test reached, after the table; the summary picks the table's
+      # TOTAL row by name, since that list would follow it.
       - name: tests + coverage (every line)
         run: |
           set -o pipefail
-          cargo llvm-cov --workspace --fail-under-lines 100 --summary-only | tee coverage.txt
+          cargo llvm-cov --workspace --fail-under-lines 100 --summary-only --show-missing-lines | tee coverage.txt
           {
             echo '### Coverage'
             echo '```'
-            tail -n 3 coverage.txt
+            grep -B2 '^TOTAL' coverage.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
