@@ -184,11 +184,9 @@ pub async fn ldap_login<R: AccessRule>(
 
     let grant = R::grant_for(&config.access, username, &user.member_of).ok_or_else(|| {
         let groups = user.member_of.len();
-        tracing::warn!(
-            username,
-            groups,
-            "LDAP login refused: no access rule names this user or their groups"
-        );
+        // A const so the call fits one line (see ldap_directory.rs).
+        const MESSAGE: &str = "LDAP login refused: no access rule names this user or their groups";
+        tracing::warn!(username, groups, "{MESSAGE}");
         LoginError::NotAuthorized
     })?;
 

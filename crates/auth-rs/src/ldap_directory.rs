@@ -82,10 +82,13 @@ async fn authenticate(request: DirectoryLogin<'_>) -> Result<DirectoryUser, Dire
         let _ = ldap.unbind().await;
         if entries.len() > 1 {
             let matches = entries.len();
-            tracing::warn!(
-                matches,
-                "LDAP user filter matched more than one entry; refusing the login"
-            );
+            // The message is a const so the call fits one line: tracing's
+            // `log` fallback (on through axum) repeats it in a branch that
+            // never runs while a subscriber is set, and on a line of its own
+            // it is a line no test reaches.
+            const MESSAGE: &str =
+                "LDAP user filter matched more than one entry; refusing the login";
+            tracing::warn!(matches, "{MESSAGE}");
         }
         return Err(DirectoryError::InvalidCredentials);
     };
